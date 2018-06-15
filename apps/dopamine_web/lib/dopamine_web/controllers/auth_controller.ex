@@ -1,16 +1,16 @@
 defmodule DopamineWeb.AuthController do
   use DopamineWeb, :controller
 
-  alias DopamineWeb.Forms.Registration, as: Registration
-
   plug DopamineWeb.Plugs.Ratelimit
 
   action_fallback DopamineWeb.MatrixErrorController
 
-  def register(conn, %{"auth" => %{"type" => auth_type} = auth} = params) do
-    case Registration.from_map(params) do
-      {:ok, params} -> text(conn, "Got parameters")
-      {:error, _err} -> {:error, :forbidden}
+  def register(conn, %{"auth" => %{"type" => "m.login.password"},
+                       "user" => username,
+                       "password" => password}) do
+    case Dopamine.Accounts.create_user(username, password) do
+      {:ok, user} -> json conn, %{"msg": "successfully created user!"}
+      {:error, err} -> json conn, %{"msg": "failed to create user."}
     end
   end
 
@@ -24,8 +24,11 @@ defmodule DopamineWeb.AuthController do
 
   def login(conn, %{"type" => "m.login.password", 
                               "password" => password, 
-			      "user" => username} = params) do
-    render(conn, "success.json", username: username)
+			                        "user" => username} = params) do
+    case Dopamine.Accounts.verify_user(username, password) do
+      {:ok, user} -> json conn, %{"msg": "successfully logged in!"}
+      {:error, reason} -> json conn, %{"msg": "failed to log in"}
+    end
   end
 
 end
