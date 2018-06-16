@@ -23,7 +23,7 @@ defmodule Dopamine.Mixfile do
   def application do
     [
       mod: {Dopamine.Application, []},
-      extra_applications: [:logger, :runtime_tools]
+      extra_applications: [:logger, :runtime_tools, :crypto]
     ]
   end
 

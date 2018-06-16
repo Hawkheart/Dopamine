@@ -25,15 +25,23 @@ defmodule Dopamine.Accounts do
   defp check_password(user = %User{}, password) do
     case Comeonin.Argon2.check_pass(user, password, hash_key: :hash) do
       {:ok, user} -> {:ok, user}
-      {:error, msg} -> {:error, :bad_pass}
+      {:error, _msg} -> {:error, :bad_pass}
     end
   end
-
 
   def create_session(user = %User{}) do
     session = %Session{}
     changeset = Session.create_changeset(session, %{})
     Dopamine.Repo.insert changeset
+  end
+
+  def delete_session(session) do
+    Dopamine.Repo.delete session
+  end
+
+  def get_session(token) do
+    IO.inspect token
+    Dopamine.Repo.get_by(Session, token: token)
   end
 
 end

@@ -28,10 +28,17 @@ defmodule DopamineWeb.AuthController do
 			                        "user" => username} = params) do
     with {:ok, user} <- Accounts.verify_user(username, password),
          {:ok, session} <- Accounts.create_session(user) do
-      json conn, %{"msg": "successfully logged in with session ID #{session.id}"}
+      json conn, %{"msg": "successfully logged in with session ID #{session.token}"}
     else
       _ -> json conn, %{"msg": "failed to log in"}
     end
+  end
+
+  def logout(conn, _params) do
+    session = conn.assigns.session
+    {:ok, session} = Accounts.delete_session(session)
+    conn
+    |> json(%{"msg": "ok"})
   end
 
 end
