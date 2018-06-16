@@ -36,8 +36,9 @@ defmodule DopamineWeb.AuthController do
                               "password" => password, 
 			                        "user" => username} = params) do
     with {:ok, user} <- Accounts.verify_user(username, password),
-         {:ok, session} <- Accounts.create_session(user) do
-      json conn, %{"msg": "successfully logged in with session ID #{session.token}"}
+         {:ok, session} <- Accounts.create_session(user, "aaaa") do
+
+      json conn, %{token: session.token, device_id: session.device_id}
     else
       {:error, type} -> {:error, type}
       _ -> {:error, :generic}

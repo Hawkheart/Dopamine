@@ -31,8 +31,8 @@ defmodule Dopamine.Accounts do
 
   def create_session(user = %User{}, device_id) do
     session = %Session{}
-    changeset = Session.create_changeset(session, %{device_id: device_id})
-    Dopamine.Repo.insert changeset
+    changeset = Session.create_changeset(session, %{device_id: device_id, user_id: user.id})
+    Dopamine.Repo.insert(changeset)
   end
 
   def delete_session(session) do
@@ -41,6 +41,7 @@ defmodule Dopamine.Accounts do
 
   def get_session(token) do
     Dopamine.Repo.get_by(Session, token: token)
+    |> Dopamine.Repo.preload(:user)
   end
 
 end

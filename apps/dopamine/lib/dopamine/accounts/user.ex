@@ -10,6 +10,8 @@ defmodule Dopamine.Accounts.User do
     field :hash, :string
     field :username, :string
 
+    has_many :sessions, Dopamine.Accounts.Session
+
     timestamps()
   end
 
