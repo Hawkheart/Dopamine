@@ -20,7 +20,7 @@ defmodule DopamineWeb.AuthController do
       |> json(resp)
     else
       {:error, errcode} when is_atom(errcode) -> {:error, errcode}
-      _ -> {:error, :unknown}
+      err -> IO.inspect err; {:error, :unknown}
     end
   end
 
@@ -41,7 +41,7 @@ defmodule DopamineWeb.AuthController do
       json conn, %{token: session.token, device_id: session.device_id}
     else
       {:error, type} -> {:error, type}
-      _ -> {:error, :generic}
+      err -> IO.inspect err; {:error, :generic}
     end
   end
 

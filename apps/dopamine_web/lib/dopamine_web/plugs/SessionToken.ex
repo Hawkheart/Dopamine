@@ -1,27 +1,40 @@
 defmodule DopamineWeb.Plugs.SessionToken do
-  import Phoenix.Controller, only: [json: 2]
   import Plug.Conn
+
+  alias DopamineWeb.MatrixErrorController
 
   def init(default) do
     default
   end
 
   def call(conn, _default) do
-    with {:ok, token} <- parse_token(get_req_header(conn, "authorization")),
-         session when not is_nil(session) <- Dopamine.Accounts.get_session token do
+    # Make sure the query parameters are fetched
+    conn = fetch_query_params(conn)
+    token = conn.query_params["auth_token"]
+
+    # Figure out where the token is and extract it
+    result = if token != nil do
+      {:ok, token}
+    else
+      header = get_req_header(conn, "authorization")
+      parse_token(header)
+    end
+
+    with {:ok, token} <- result,
+         session when not is_nil(session) <- Dopamine.Accounts.get_session(token) do
       conn
       |> assign(:session, session)
     else
-      nil -> send_error conn, :not_found
-      err -> send_error conn, err
+      {:error, err} -> send_error(conn, {:error, err})
+      nil -> send_error(conn, {:error, :bad_token})
+      _ -> send_error(conn, {:error, :unknown})
     end
   end
 
-  # TODO consolidate all these
   defp send_error(conn, err) do
+    # Just call out to the error handler and halt.
     conn
-    |> put_status(401)
-    |> json(%{})
+    |> MatrixErrorController.call(err)
     |> halt
   end
 
@@ -30,7 +43,12 @@ defmodule DopamineWeb.Plugs.SessionToken do
   end
 
   defp parse_token(token) do
-    [_method, token] = String.split(to_string(token), " ")
-    {:ok, token}
+    token = String.split(to_string(token), " ")
+    if length(token) == 2 do
+      [_method, token] = token
+      {:ok, token}
+    else
+      {:error, :bad_token}
+    end
   end
 end

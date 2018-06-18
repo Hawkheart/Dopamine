@@ -15,7 +15,7 @@ defmodule DopamineWeb.MatrixErrorController do
       :bad_token -> "The access token submitted was not valid."
       :no_token -> "This resource requires an access token."
       :user_used -> "A user by this name already exists."
-      _ -> "An unknown error occured."
+      _ -> IO.inspect err; "An unknown error occured."
     end
   end
 

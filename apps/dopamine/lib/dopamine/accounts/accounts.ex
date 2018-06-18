@@ -18,7 +18,7 @@ defmodule Dopamine.Accounts do
     else
         # Without a user, just perform a dummy check and return.
       _ -> Comeonin.Argon2.dummy_checkpw()
-           {:error, :bad_pass}
+           {:error, :no_user}
     end
   end
 
@@ -31,7 +31,7 @@ defmodule Dopamine.Accounts do
 
   def create_session(user = %User{}, device_id) do
     session = %Session{}
-    changeset = Session.create_changeset(session, %{device_id: device_id, user_id: user.id})
+    changeset = Session.create_changeset(session, %{device_id: device_id, user: user})
     Dopamine.Repo.insert(changeset)
   end
 

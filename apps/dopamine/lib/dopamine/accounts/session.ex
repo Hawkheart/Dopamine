@@ -19,8 +19,8 @@ defmodule Dopamine.Accounts.Session do
   @doc false
   def changeset(session, attrs) do
     session
-    |> cast(attrs, [:device_id, :creation_time, :token, :user_id])
-    |> validate_required([:device_id, :creation_time, :token, :user_id])
+    |> cast(attrs, [:device_id, :creation_time, :token])
+    |> validate_required([:device_id, :creation_time, :token])
     |> unique_constraint(:token)
   end
 
@@ -28,6 +28,7 @@ defmodule Dopamine.Accounts.Session do
     session
     |> change(creation_time: DateTime.utc_now())
     |> change(token: Base.encode16(Crypto.strong_rand_bytes(16)))
+    |> put_assoc(:user, attrs.user)
     |> changeset(attrs)
   end
 
