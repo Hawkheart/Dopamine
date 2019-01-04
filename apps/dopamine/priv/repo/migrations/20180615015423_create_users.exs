@@ -3,14 +3,17 @@ defmodule Dopamine.Repo.Migrations.CreateUsers do
 
   def change do
     create table(:users, primary_key: false) do
-      add :id, :binary_id, primary_key: true
-      add :username, :string
-      add :display_name, :string
-      add :hash, :string
+      add(:id, :binary_id, primary_key: true)
+      add(:username, :string)
+      add(:display_name, :string)
+      add(:hash, :string)
+
+      add(:presence, :string)
+      add(:status_msg, :string)
 
       timestamps()
     end
 
-    create unique_index(:users, [:username])
+    create(unique_index(:users, [:username]))
   end
 end

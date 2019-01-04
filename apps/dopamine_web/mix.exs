@@ -10,9 +10,9 @@ defmodule DopamineWeb.Mixfile do
       deps_path: "../../deps",
       lockfile: "../../mix.lock",
       elixir: "~> 1.4",
-      elixirc_paths: elixirc_paths(Mix.env),
-      compilers: [:phoenix, :gettext] ++ Mix.compilers,
-      start_permanent: Mix.env == :prod,
+      elixirc_paths: elixirc_paths(Mix.env()),
+      compilers: [:phoenix, :gettext] ++ Mix.compilers(),
+      start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps()
     ]
@@ -30,20 +30,23 @@ defmodule DopamineWeb.Mixfile do
 
   # Specifies which paths to compile per environment.
   defp elixirc_paths(:test), do: ["lib", "test/support"]
-  defp elixirc_paths(_),     do: ["lib"]
+  defp elixirc_paths(_), do: ["lib"]
 
   # Specifies your project dependencies.
   #
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:phoenix, "~> 1.3.2"},
+      {:phoenix, "~> 1.4.0-rc", override: true},
       {:phoenix_pubsub, "~> 1.0"},
-      {:phoenix_ecto, "~> 3.2"},
+      {:phoenix_ecto, "~> 4.0"},
       {:gettext, "~> 0.11"},
       {:dopamine, in_umbrella: true},
-      {:cowboy, "~> 1.0"},
-      {:hammer, "~> 5.0"}
+      {:plug_cowboy, "~> 2.0"},
+      {:plug, "~> 1.7"},
+      {:hammer, "~> 5.0"},
+      {:jason, "~> 1.1"},
+      {:cors_plug, "~> 2.0"}
     ]
   end
 
@@ -52,6 +55,6 @@ defmodule DopamineWeb.Mixfile do
   #
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
-    ["test": ["ecto.create --quiet", "ecto.migrate", "test"]]
+    [test: ["ecto.create --quiet", "ecto.migrate", "test"]]
   end
 end

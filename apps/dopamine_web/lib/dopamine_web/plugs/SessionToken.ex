@@ -13,17 +13,28 @@ defmodule DopamineWeb.Plugs.SessionToken do
     token = conn.query_params["auth_token"]
 
     # Figure out where the token is and extract it
-    result = if token != nil do
-      {:ok, token}
-    else
-      header = get_req_header(conn, "authorization")
-      parse_token(header)
-    end
+    result =
+      if token != nil do
+        {:ok, token}
+      else
+        header = get_req_header(conn, "authorization")
+        parse_token(header)
+      end
 
     with {:ok, token} <- result,
          session when not is_nil(session) <- Dopamine.Accounts.get_session(token) do
+      ip = conn.remote_ip |> :inet_parse.ntoa() |> to_string()
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      device =
+        session.device
+        |> Dopamine.Accounts.Device.changeset(%{last_ip: ip, last_time: now})
+        |> Dopamine.Repo.insert_or_update!()
+
       conn
       |> assign(:session, session)
+      |> assign(:user, session.user)
+      |> assign(:device, device)
     else
       {:error, err} -> send_error(conn, {:error, err})
       nil -> send_error(conn, {:error, :bad_token})
@@ -44,6 +55,7 @@ defmodule DopamineWeb.Plugs.SessionToken do
 
   defp parse_token(token) do
     token = String.split(to_string(token), " ")
+
     if length(token) == 2 do
       [_method, token] = token
       {:ok, token}

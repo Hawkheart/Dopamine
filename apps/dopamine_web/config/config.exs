@@ -16,21 +16,22 @@ config :dopamine_web, DopamineWeb.Endpoint,
   url: [host: "localhost"],
   secret_key_base: "g3rOoiaWH7vj7aFjxd4Kf2Iv1nqqLCK4p7JlnJrjJ9brSjXXCjMBc5tNGe7lXhzL",
   render_errors: [view: DopamineWeb.ErrorView, accepts: ~w(json)],
-  pubsub: [name: DopamineWeb.PubSub,
-           adapter: Phoenix.PubSub.PG2]
+  pubsub: [name: DopamineWeb.PubSub, adapter: Phoenix.PubSub.PG2]
 
 # Configures Elixir's Logger
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id]
 
-config :dopamine_web, :generators,
-  context_app: :dopamine
+config :dopamine_web, :generators, context_app: :dopamine
 
 config :hammer,
-  backend: {Hammer.Backend.ETS, [expiry_ms: 60_000 * 60 * 4,
-                                 cleanup_interval_ms: 60_000 * 10]}
+  backend: {Hammer.Backend.ETS, [expiry_ms: 60_000 * 60 * 4, cleanup_interval_ms: 60_000 * 10]}
+
+config :phoenix, :format_encoders, json: Jason
+
+config :phoenix, :json_library, Jason
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
-import_config "#{Mix.env}.exs"
+import_config "#{Mix.env()}.exs"

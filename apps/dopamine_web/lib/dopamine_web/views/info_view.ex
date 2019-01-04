@@ -8,7 +8,7 @@ defmodule DopamineWeb.InfoView do
   # end
 
   def render("client_versions.json", _assigns) do
-      %{versions: ["r0.3.0"]}
+      %{versions: ["r0.4.0"]}
   end
 
   def render("server_version.json", _assigns) do

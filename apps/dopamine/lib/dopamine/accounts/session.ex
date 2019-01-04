@@ -4,14 +4,13 @@ defmodule Dopamine.Accounts.Session do
 
   alias :crypto, as: Crypto
 
-
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
   schema "sessions" do
-    field :creation_time, :utc_datetime
-    field :device_id, :string
-    field :token, :string
-    belongs_to :user, Dopamine.Accounts.User
+    field(:creation_time, :utc_datetime)
+    field(:token, :string)
+    belongs_to(:user, Dopamine.Accounts.User)
+    belongs_to(:device, Dopamine.Accounts.Device)
 
     timestamps()
   end
@@ -19,17 +18,22 @@ defmodule Dopamine.Accounts.Session do
   @doc false
   def changeset(session, attrs) do
     session
-    |> cast(attrs, [:device_id, :creation_time, :token])
-    |> validate_required([:device_id, :creation_time, :token])
+    |> cast(attrs, [:creation_time, :token])
+    |> validate_required([:creation_time, :token])
+    |> assoc_constraint(:user)
+    |> assoc_constraint(:device)
     |> unique_constraint(:token)
   end
 
-  def create_changeset(session, attrs) do
+  def creation_changeset(session, attrs) do
+    now =
+      DateTime.utc_now()
+      |> DateTime.truncate(:second)
+
     session
-    |> change(creation_time: DateTime.utc_now())
+    |> change(creation_time: now)
     |> change(token: Base.encode16(Crypto.strong_rand_bytes(16)))
-    |> put_assoc(:user, attrs.user)
+    |> cast(attrs, [:user_id, :device_id])
     |> changeset(attrs)
   end
-
 end
