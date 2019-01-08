@@ -26,6 +26,17 @@ defmodule DopamineWeb.SyncController do
     if changeset.valid? do
       args = Ecto.Changeset.apply_changes(changeset)
 
+      if not is_nil(args.filter) do
+        import Ecto.Query, only: [from: 2]
+
+        filter =
+          Dopamine.Repo.one!(from(f in Dopamine.Filters.Filter, where: f.id == ^args.filter))
+
+        IO.inspect(filter)
+      end
+
+      IO.inspect(args)
+
       results =
         conn
         |> update_presence(args.set_presence)
@@ -56,6 +67,17 @@ defmodule DopamineWeb.SyncController do
 
     import Ecto.Query, only: [from: 2]
 
+    user = Dopamine.Repo.preload(conn.assigns.user, [:memberships, memberships: [:room]])
+
+    joined_rooms =
+      Enum.filter(user.memberships, fn membership -> membership.status == "joined" end)
+      |> Enum.map(fn membership -> membership.room end)
+      |> Enum.map(fn room -> {room.matrix_id, calculate_timeline(room)} end)
+      |> Enum.into(%{})
+
+    IO.puts("joined_rooms data")
+    IO.inspect(joined_rooms)
+
     query =
       from(d in Dopamine.Accounts.Data,
         where: d.user_id == ^conn.assigns.user.id and is_nil(d.room_id)
@@ -72,11 +94,13 @@ defmodule DopamineWeb.SyncController do
     IO.puts("account data received")
     IO.inspect(account_data)
 
-    %{account_data: %{events: account_data}}
+    %{account_data: %{events: account_data}, rooms: %{join: joined_rooms}}
   end
 
   defp do_sync(conn, %Arguments{timeout: timeout, since: since}) do
     import Ecto.Query, only: [from: 2]
+
+    user = conn.assigns.user |> Dopamine.Repo.preload([:memberships])
 
     timestamp = DateTime.from_unix!(since)
 
@@ -88,16 +112,43 @@ defmodule DopamineWeb.SyncController do
 
     new_data = Dopamine.Repo.all(query)
 
-    IO.inspect(new_data)
+    rooms =
+      user.memberships
+      |> Enum.filter(fn x -> x.status == "joined" end)
+      |> Enum.map(fn x -> x.room_id end)
 
-    if Enum.empty?(new_data) do
+    query =
+      from(e in Dopamine.Rooms.Event,
+        where: e.room_id in ^rooms and e.updated_at > ^timestamp,
+        order_by: [e.depth, e.updated_at]
+      )
+
+    new_events =
+      Dopamine.Repo.all(query)
+      |> Dopamine.Repo.preload([:room])
+      |> Enum.group_by(fn x -> x.room.matrix_id end)
+
+    if Enum.empty?(new_data) and Enum.empty?(new_events) do
       # Long poll for new events.
-      Dopamine.PubSub.subscribe_to_user(conn.assigns.user.username)
+
+      :ok =
+        Phoenix.PubSub.subscribe(
+          DopamineWeb.PubSub,
+          Dopamine.Accounts.User.matrix_id(conn.assigns.user)
+        )
 
       received =
         receive do
           {:account_data, data} ->
             %{account_data: %{events: [%{type: data.type, content: data.content}]}}
+
+          {:join_room, room} ->
+            %{rooms: %{join: %{room.matrix_id => calculate_timeline(room)}}}
+
+          {:event, room, event} ->
+            %{
+              rooms: %{join: %{room.matrix_id => %{timeline: %{events: [format_event(event)]}}}}
+            }
         after
           timeout -> %{}
         end
@@ -113,7 +164,13 @@ defmodule DopamineWeb.SyncController do
             into: [],
             do: %{type: record.type, content: record.content}
 
-      %{account_data: %{events: account_data}}
+      joined_rooms =
+        for {room_id, events} <- new_events, into: %{} do
+          timeline = Enum.map(events, &format_event/1)
+          {room_id, %{timeline: %{events: timeline}}}
+        end
+
+      %{account_data: %{events: account_data}, rooms: %{join: joined_rooms}}
     end
   end
 
@@ -121,5 +178,40 @@ defmodule DopamineWeb.SyncController do
     now = DateTime.utc_now() |> DateTime.to_unix(:second) |> to_string()
 
     Map.put(result, :next_batch, now)
+  end
+
+  defp calculate_timeline(room) do
+    {:ok, room} = Dopamine.Rooms.get_room(room.matrix_id)
+
+    events =
+      GenServer.call(room, :all_events)
+      |> Enum.map(fn e -> format_event(e) end)
+
+    IO.inspect(events)
+
+    %{timeline: %{events: events}}
+  end
+
+  defp format_event(event) do
+    IO.inspect(event)
+
+    event =
+      event
+      |> Map.from_struct()
+      |> Map.drop([
+        :__meta__,
+        :prev_content,
+        :room,
+        :depth,
+        :id,
+        :inserted_at,
+        :room_id,
+        :updated_at
+      ])
+      |> Map.put(:event_id, event.matrix_id)
+      |> Map.put(:origin_server_ts, event.origin_timestamp |> DateTime.to_unix(:millisecond))
+      |> Map.drop([:matrix_id, :origin_timestamp])
+
+    if is_nil(event.state_key), do: Map.delete(event, :state_key), else: event
   end
 end

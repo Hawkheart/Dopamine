@@ -1,7 +1,8 @@
 defmodule DopamineWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :dopamine_web
 
-  socket("/socket", DopamineWeb.UserSocket)
+  # If we ever need to enable support for WebSockets..
+  # socket("/socket", DopamineWeb.UserSocket, websocket: [], longpoll: [])
 
   # Serve at "/" the static files from "priv/static" directory.
   #

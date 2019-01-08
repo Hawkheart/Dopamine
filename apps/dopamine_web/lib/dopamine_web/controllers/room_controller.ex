@@ -17,10 +17,16 @@ defmodule DopamineWeb.RoomController do
       field(:creation_content, :map)
       field(:preset, :string)
       field(:is_direct, :boolean)
+      field(:power_level_content_override, :map, default: %{})
       field(:invite_3pid, {:array, Forms.Invite3pid})
-      field(:initial_state, {:array, Forms.StateEvent})
+      field(:initial_state, {:array, Forms.StateEvent}, default: [])
     end
 
+    @spec changeset(
+            {map(), map()}
+            | %{:__struct__ => atom() | %{__changeset__: map()}, optional(atom()) => any()},
+            :invalid | %{optional(:__struct__) => none(), optional(atom() | binary()) => any()}
+          ) :: Ecto.Changeset.t()
     def changeset(data, attrs) do
       data
       |> cast(attrs, [
@@ -34,7 +40,8 @@ defmodule DopamineWeb.RoomController do
         :preset,
         :is_direct,
         :invite_3pid,
-        :initial_state
+        :initial_state,
+        :power_level_content_override
       ])
       |> validate_inclusion(:visibility, ["public", "private"])
       |> validate_inclusion(:preset, ["private_chat", "public_chat", "trusted_private_chat", nil])
@@ -45,8 +52,156 @@ defmodule DopamineWeb.RoomController do
     args = %CreateRoomArgs{} |> CreateRoomArgs.changeset(data) |> Ecto.Changeset.apply_changes()
     IO.inspect(args)
     user = conn.assigns.user
-    Dopamine.Rooms.create_room(user, args)
+    {:ok, %{room: room}} = Dopamine.Rooms.create_room(user, args)
+
+    Phoenix.PubSub.broadcast(
+      DopamineWeb.PubSub,
+      Dopamine.Accounts.User.matrix_id(user),
+      {:join_room, room}
+    )
+
+    conn |> json(%{room_id: room.matrix_id})
+  end
+
+  def send_event(conn, _data) do
+    import Ecto.Query, only: [from: 2]
+    # TODO permissions check
+    %{"room_id" => room_mxid, "type" => type} = conn.path_params
+    content = conn.body_params
+
+    room_pid = Dopamine.MatrixRegistry.lookup(room_mxid)
+    IO.puts("Got PID for room?")
+    IO.inspect(room_pid)
+
+    room =
+      Dopamine.Repo.one!(from(r in Dopamine.Rooms.Room, where: r.matrix_id == ^room_mxid))
+      |> Dopamine.Repo.preload([:memberships, [memberships: :user]])
+
+    user_id = Dopamine.Accounts.User.matrix_id(conn.assigns.user)
+
+    attrs = %{
+      content: content,
+      room_id: room.id,
+      unsigned: %{},
+      sender: user_id,
+      state_key: nil,
+      type: type,
+      depth: 9001
+    }
+
+    event =
+      Dopamine.Rooms.Event.creation_changeset(%Dopamine.Rooms.Event{}, attrs)
+      |> Dopamine.Repo.insert!()
+
+    room.memberships
+    |> Enum.filter(fn membership -> membership.status == "joined" end)
+    |> Enum.map(fn membership -> membership.user end)
+    |> Enum.map(fn user -> Dopamine.Accounts.User.matrix_id(user) end)
+    |> Enum.each(fn user ->
+      Phoenix.PubSub.broadcast!(DopamineWeb.PubSub, user, {:event, room, event})
+    end)
+
+    conn |> json(%{event_id: event.matrix_id})
+  end
+
+  def get_public(conn, _data) do
+    public_rooms =
+      Dopamine.Rooms.public_rooms()
+      |> Dopamine.Repo.preload(:memberships)
+
+    total_room_count_estimate = length(public_rooms)
+
+    chunks =
+      Enum.map(public_rooms, fn room ->
+        %{
+          room_id: room.matrix_id,
+          num_joined_members: member_count(room),
+          world_readable: false,
+          guest_can_join: false
+        }
+      end)
+
+    IO.inspect(chunks)
+
+    conn |> json(%{total_room_count_estimate: total_room_count_estimate, chunk: chunks})
+  end
+
+  def get_visibility(conn, _data) do
+    room_id = conn.path_params["room_id"]
+    {:ok, room} = Dopamine.Rooms.get_room(room_id)
+
+    public = GenServer.call(room, :get_visibility)
+
+    vis = if public, do: "public", else: "private"
+    conn |> json(%{visibility: vis})
+  end
+
+  def set_visibility(conn, data) do
+    room_id = conn.path_params["room_id"]
+    {:ok, room} = Dopamine.Rooms.get_room(room_id)
+
+    public = data["visibility"] == "public"
+
+    :ok = GenServer.call(room, {:set_visibility, public})
     conn |> json(%{})
+  end
+
+  defp member_count(room) do
+    Enum.filter(room.memberships, fn x -> x.status == "joined" end) |> length
+  end
+
+  def join(conn, _data) do
+    import Ecto.Query, only: [from: 2]
+    room_mxid = conn.path_params["room_id"]
+
+    room =
+      Dopamine.Repo.one!(from(r in Dopamine.Rooms.Room, where: r.matrix_id == ^room_mxid))
+      |> Dopamine.Repo.preload([:memberships, memberships: [:user]])
+
+    user_mxid = Dopamine.Accounts.User.matrix_id(conn.assigns.user)
+
+    new_membership = %Dopamine.Rooms.Membership{
+      status: "joined",
+      user_id: conn.assigns.user.id,
+      room_id: room.id
+    }
+
+    Dopamine.Repo.insert!(new_membership)
+
+    attrs = %{
+      content: %{"membership" => "join"},
+      unsigned: %{},
+      state_key: user_mxid,
+      sender: user_mxid,
+      type: "m.room.member",
+      room_id: room.id,
+      depth: 9001
+    }
+
+    event =
+      Dopamine.Rooms.Event.creation_changeset(%Dopamine.Rooms.Event{}, attrs)
+      |> Dopamine.Repo.insert!()
+
+    room.memberships
+    |> Enum.filter(fn membership -> membership.status == "joined" end)
+    |> Enum.map(fn membership -> membership.user end)
+    |> Enum.map(fn user -> Dopamine.Accounts.User.matrix_id(user) end)
+    |> Enum.each(fn user ->
+      Phoenix.PubSub.broadcast!(DopamineWeb.PubSub, user, {:event, room, event})
+    end)
+
+    Phoenix.PubSub.broadcast!(
+      DopamineWeb.PubSub,
+      Dopamine.Accounts.User.matrix_id(conn.assigns.user),
+      {:join_room, room}
+    )
+
+    conn |> json(%{})
+  end
+
+  def initial_sync(conn, _data) do
+    room_id = conn.path_params["room_id"]
+    conn |> json(%{room_id: room_id})
   end
 end
 

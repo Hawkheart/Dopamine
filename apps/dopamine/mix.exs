@@ -39,7 +39,8 @@ defmodule Dopamine.Mixfile do
       {:postgrex, ">= 0.0.0"},
       {:ecto_sql, "~> 3.0"},
       {:comeonin, "~> 4.1"},
-      {:argon2_elixir, "~> 1.3.1"}
+      {:argon2_elixir, "~> 1.3.1"},
+      {:jason, "~> 1.1"}
     ]
   end
 

@@ -1,5 +1,7 @@
 defmodule Dopamine.Repo do
-  use Ecto.Repo, otp_app: :dopamine
+  use Ecto.Repo,
+    otp_app: :dopamine,
+    adapter: Ecto.Adapters.Postgres
 
   @doc """
   Dynamically loads the repository url from the

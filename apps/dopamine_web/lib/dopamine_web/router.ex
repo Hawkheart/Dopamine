@@ -24,7 +24,16 @@ defmodule DopamineWeb.Router do
     pipe_through(:authenticated)
 
     post("/logout", AuthController, :logout)
+
     post("/createRoom", RoomController, :create)
+    post("/join/:room_id", RoomController, :join)
+    get("/rooms/:room_id/initialSync", RoomController, :initial_sync)
+    put("/rooms/:room_id/send/:type/:txn_id", RoomController, :send_event)
+    get("/publicRooms", RoomController, :get_public)
+    post("/publicRooms", RoomController, :get_public)
+
+    get("/directory/list/room/:room_id", RoomController, :get_visibility)
+    put("/directory/list/room/:room_id", RoomController, :set_visibility)
 
     get("/pushrules", PresenceController, :get_push)
 

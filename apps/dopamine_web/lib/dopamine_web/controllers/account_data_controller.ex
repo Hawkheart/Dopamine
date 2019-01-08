@@ -32,7 +32,11 @@ defmodule DopamineWeb.AccountDataController do
         Dopamine.Repo.insert!(account_data)
       end
 
-    Dopamine.PubSub.send_to_user(user.username, {:account_data, data})
+    Phoenix.PubSub.broadcast!(
+      DopamineWeb.PubSub,
+      Dopamine.Accounts.User.matrix_id(user),
+      {:account_data, data}
+    )
 
     conn |> json(%{})
   end

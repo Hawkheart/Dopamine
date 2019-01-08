@@ -15,7 +15,8 @@ defmodule Dopamine.Application do
     Supervisor.start_link(
       [
         supervisor(Dopamine.Repo, []),
-        {Registry, keys: :unique, name: Dopamine.PubSub}
+        {DynamicSupervisor, strategy: :one_for_one, name: Dopamine.MatrixSupervisor},
+        {Registry, keys: :unique, name: Dopamine.MatrixRegistry}
       ],
       strategy: :one_for_one,
       name: Dopamine.Supervisor

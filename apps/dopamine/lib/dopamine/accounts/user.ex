@@ -34,7 +34,7 @@ defmodule Dopamine.Accounts.User do
     |> cast(attrs, [:username, :display_name, :hash])
     |> validate_required([:username, :hash])
     |> validate_length(:username, min: 1, max: 128)
-    |> validate_format(:username, ~r(^[a-z0-9-.=_/]+$))
+    |> validate_format(:username, ~r(^[a-z0-9-.=_/]+$), message: "must be lowercase")
     |> unique_constraint(:username)
   end
 
@@ -42,7 +42,7 @@ defmodule Dopamine.Accounts.User do
   def creation_changeset(user, attrs) do
     user
     |> cast(attrs, [:password])
-    |> validate_length(:password, min: 8)
+    |> validate_length(:password, min: 8, message: "is too short")
     |> put_password_hash()
     |> put_change(:display_name, attrs.username)
     |> cast_assoc(:devices, with: &Dopamine.Accounts.Device.creation_changeset/2)

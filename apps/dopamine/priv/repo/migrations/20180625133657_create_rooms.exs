@@ -5,6 +5,9 @@ defmodule Dopamine.Repo.Migrations.CreateRooms do
     create table(:rooms, primary_key: false) do
       add(:id, :binary_id, primary_key: true)
       add(:public, :boolean, null: false)
+
+      add(:state, :map)
+
       add(:matrix_id, :string, null: false)
 
       timestamps()

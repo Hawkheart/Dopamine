@@ -9,6 +9,7 @@ defmodule Dopamine.Accounts do
     Dopamine.Repo.get_by(User, username: username)
   end
 
+  @spec create_user(String.t(), String.t(), String.t()) :: {:ok, map()} | tuple
   def create_user(username, password, device_id) do
     user = %User{}
 
