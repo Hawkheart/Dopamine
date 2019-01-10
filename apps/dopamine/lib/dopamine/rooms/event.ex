@@ -5,7 +5,7 @@ defmodule Dopamine.Rooms.Event do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
   schema "events" do
-    field(:matrix_id, :string)
+    field(:matrix_id, Dopamine.MatrixID)
     field(:content, :map)
     field(:prev_content, :map)
     field(:unsigned, :map)
@@ -43,15 +43,8 @@ defmodule Dopamine.Rooms.Event do
   def creation_changeset(event, attrs) do
     event
     |> change()
-    |> put_change(:matrix_id, generate_mxid())
+    |> put_change(:matrix_id, Dopamine.MatrixID.generate(:event))
     |> put_change(:origin_timestamp, DateTime.utc_now())
     |> changeset(attrs)
-  end
-
-  # TODO - put this all together
-  defp generate_mxid do
-    id = :crypto.strong_rand_bytes(16) |> Base.encode16()
-    domain = Application.get_env(:dopamine, :domain, "localhost")
-    "$#{id}:#{domain}"
   end
 end

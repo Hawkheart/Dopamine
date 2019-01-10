@@ -36,10 +36,8 @@ defmodule Dopamine.Rooms do
 
     public = args.visibility == "public"
 
-    matrix_id = :crypto.strong_rand_bytes(16) |> Base.encode16()
-    matrix_id = "!#{matrix_id}:localhost"
+    matrix_id = Dopamine.MatrixID.generate(:room)
 
-    # temporary test
     user_mxid = Dopamine.Accounts.User.matrix_id(user)
 
     preset = get_preset(args)

@@ -2,8 +2,6 @@ defmodule Dopamine.MatrixID do
   @behaviour Ecto.Type
   use Ecto.Schema
 
-  def type, do: :string
-
   @primary_key false
   embedded_schema do
     field(:sigil, :string)
@@ -36,6 +34,26 @@ defmodule Dopamine.MatrixID do
     %{sigil: sigil, localpart: localpart, domain: domain}
   end
 
+  @doc """
+  Generates a new (random) Matrix ID of a given type.
+  """
+  def generate(type) when is_atom(type) do
+    generate(sigil(type))
+  end
+
+  def generate(sigil) do
+    localpart =
+      :crypto.strong_rand_bytes(16) |> Base.encode64(padding: false) |> String.downcase()
+
+    %__MODULE__{
+      sigil: sigil,
+      localpart: localpart,
+      domain: Application.get_env(:dopamine, :hostname)
+    }
+  end
+
+  def type, do: :string
+
   def cast(input) when is_binary(input) do
     changeset =
       %__MODULE__{}
@@ -66,10 +84,21 @@ defmodule Dopamine.MatrixID do
 
     {:ok, obj}
   end
+
+  defp sigil(:room), do: "!"
+  defp sigil(:alias), do: "#"
+  defp sigil(:event), do: "$"
+  defp sigil(:user), do: "@"
 end
 
 defimpl String.Chars, for: Dopamine.MatrixID do
   def to_string(input) do
     "#{input.sigil}#{input.localpart}:#{input.domain}"
+  end
+end
+
+defimpl Jason.Encoder, for: Dopamine.MatrixID do
+  def encode(struct, opts) do
+    Jason.Encode.string(to_string(struct), opts)
   end
 end

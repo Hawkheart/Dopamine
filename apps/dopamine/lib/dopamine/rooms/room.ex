@@ -1,5 +1,6 @@
 defmodule Dopamine.Rooms.RoomState do
   @behaviour Ecto.Type
+  @derive Jason.Encoder
   use Dopamine.Schema
 
   @primary_key false
@@ -41,9 +42,6 @@ defmodule Dopamine.Rooms.RoomState do
     {:ok, struct!(__MODULE__, data)}
   end
 end
-
-require Protocol
-Protocol.derive(Jason.Encoder, Dopamine.Rooms.RoomState)
 
 defmodule Dopamine.Rooms.Room do
   use Dopamine.Schema
