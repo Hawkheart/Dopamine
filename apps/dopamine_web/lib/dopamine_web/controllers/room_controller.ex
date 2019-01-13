@@ -52,55 +52,44 @@ defmodule DopamineWeb.RoomController do
     args = %CreateRoomArgs{} |> CreateRoomArgs.changeset(data) |> Ecto.Changeset.apply_changes()
     IO.inspect(args)
     user = conn.assigns.user
-    {:ok, %{room: room}} = Dopamine.Rooms.create_room(user, args)
+    {:ok, room_id} = Dopamine.Rooms.create_room(user, args)
 
-    Phoenix.PubSub.broadcast(
-      DopamineWeb.PubSub,
-      Dopamine.Accounts.User.matrix_id(user),
-      {:join_room, room}
-    )
-
-    conn |> json(%{room_id: room.matrix_id})
+    conn |> json(%{room_id: room_id})
   end
 
   def send_event(conn, _data) do
-    import Ecto.Query, only: [from: 2]
-    # TODO permissions check
+    # TODO - permissions check
+
     %{"room_id" => room_mxid, "type" => type} = conn.path_params
     content = conn.body_params
 
-    room_pid = Dopamine.MatrixRegistry.lookup(room_mxid)
-    IO.puts("Got PID for room?")
-    IO.inspect(room_pid)
-
-    room =
-      Dopamine.Repo.one!(from(r in Dopamine.Rooms.Room, where: r.matrix_id == ^room_mxid))
-      |> Dopamine.Repo.preload([:memberships, [memberships: :user]])
+    {:ok, room_pid} = Dopamine.Rooms.get_room(room_mxid)
 
     user_id = Dopamine.Accounts.User.matrix_id(conn.assigns.user)
 
     attrs = %{
       content: content,
-      room_id: room.id,
       unsigned: %{},
       sender: user_id,
       state_key: nil,
-      type: type,
-      depth: 9001
+      type: type
     }
 
-    event =
-      Dopamine.Rooms.Event.creation_changeset(%Dopamine.Rooms.Event{}, attrs)
-      |> Dopamine.Repo.insert!()
+    {:ok, event} = Dopamine.Rooms.Server.insert_event!(room_pid, attrs)
 
-    room.memberships
-    |> Enum.filter(fn membership -> membership.status == "joined" end)
-    |> Enum.map(fn membership -> membership.user end)
-    |> Enum.map(fn user -> Dopamine.Accounts.User.matrix_id(user) end)
-    |> Enum.each(fn user ->
-      Phoenix.PubSub.broadcast!(DopamineWeb.PubSub, user, {:event, room, event})
-    end)
+    conn |> json(%{event_id: event.matrix_id})
+  end
 
+  def set_state(conn, _data) do
+    %{"room_id" => room_id, "type" => type} = conn.path_params
+    state_key = Map.get(conn.path_params, "state_key", "")
+    content = conn.body_params
+    user_id = Dopamine.Accounts.User.matrix_id(conn.assigns.user)
+
+    attrs = %{content: content, unsigned: %{}, sender: user_id, state_key: state_key, type: type}
+
+    {:ok, room_pid} = Dopamine.Rooms.get_room(room_id)
+    {:ok, event} = Dopamine.Rooms.Server.insert_event!(room_pid, attrs)
     conn |> json(%{event_id: event.matrix_id})
   end
 
@@ -113,11 +102,17 @@ defmodule DopamineWeb.RoomController do
 
     chunks =
       Enum.map(public_rooms, fn room ->
+        {:ok, room_pid} = Dopamine.Rooms.get_room(room.matrix_id)
+        {:ok, name_content} = Dopamine.Rooms.Server.get_state(room_pid, "m.room.name")
+
+        name = if name_content, do: name_content["name"]
+
         %{
           room_id: room.matrix_id,
           num_joined_members: member_count(room),
           world_readable: false,
-          guest_can_join: false
+          guest_can_join: false,
+          name: name
         }
       end)
 

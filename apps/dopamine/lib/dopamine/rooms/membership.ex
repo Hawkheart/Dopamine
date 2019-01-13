@@ -16,7 +16,8 @@ defmodule Dopamine.Rooms.Membership do
   @doc false
   def changeset(membership, attrs) do
     membership
-    |> cast(attrs, [:status])
-    |> validate_required([:status])
+    |> cast(attrs, [:status, :room_id, :user_id])
+    |> validate_required([:status, :room_id, :user_id])
+    |> unique_constraint(:user_id, name: :memberships_user_room_index)
   end
 end

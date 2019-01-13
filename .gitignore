@@ -1,6 +1,7 @@
 /_build
 /cover
 /deps
+apps/dopamine_web/priv/cert
 erl_crash.dump
 *.ez
 .elixir_ls

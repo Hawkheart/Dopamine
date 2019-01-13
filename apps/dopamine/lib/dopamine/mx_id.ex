@@ -43,7 +43,8 @@ defmodule Dopamine.MatrixID do
 
   def generate(sigil) do
     localpart =
-      :crypto.strong_rand_bytes(16) |> Base.encode64(padding: false) |> String.downcase()
+      :crypto.strong_rand_bytes(16)
+      |> Base.encode32(case: :lower, padding: false)
 
     %__MODULE__{
       sigil: sigil,

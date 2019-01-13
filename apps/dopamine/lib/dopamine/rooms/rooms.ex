@@ -10,7 +10,13 @@ defmodule Dopamine.Rooms do
   end
 
   def get_room(matrix_id = %Dopamine.MatrixID{sigil: "!"}) do
-    Dopamine.MatrixRegistry.lookup(matrix_id)
+    with {:ok, _pid} <- Dopamine.MatrixRegistry.lookup(matrix_id) do
+      {:ok, Dopamine.MatrixRegistry.name(matrix_id)}
+    else
+      err ->
+        IO.inspect(err)
+        {:error, :no_such_room}
+    end
   end
 
   def get_room(%Dopamine.MatrixID{}) do
@@ -29,28 +35,17 @@ defmodule Dopamine.Rooms do
   end
 
   def create_room(user, args) do
-    alias Dopamine.Rooms.Room
-    alias Dopamine.Rooms.Event
-    alias Dopamine.Rooms.Membership
-    alias Ecto.Multi
-
     public = args.visibility == "public"
-
-    matrix_id = Dopamine.MatrixID.generate(:room)
 
     user_mxid = Dopamine.Accounts.User.matrix_id(user)
 
-    preset = get_preset(args)
+    {:ok, room} = create_empty_room(user_mxid, public)
 
+    {:ok, room_pid} = get_room(room.matrix_id)
+
+    preset = get_preset(args)
+    # initial events...
     events = [
-      %{
-        content: %{creator: user_mxid, "m.federate": false, room_version: "1"},
-        unsigned: %{},
-        sender: user_mxid,
-        state_key: "",
-        type: "m.room.create",
-        depth: 0
-      },
       %{
         content:
           Map.merge(
@@ -62,40 +57,35 @@ defmodule Dopamine.Rooms do
         unsigned: %{},
         sender: user_mxid,
         state_key: "",
-        type: "m.room.power_levels",
-        depth: 1
+        type: "m.room.power_levels"
       },
       %{
         content: %{"join_rule" => join_rules(preset)},
         unsigned: %{},
         sender: user_mxid,
         type: "m.room.join_rules",
-        state_key: "",
-        depth: 2
+        state_key: ""
       },
       %{
         content: %{"history_visibility" => history_visibility(preset)},
         unsigned: %{},
         sender: user_mxid,
         state_key: "",
-        type: "m.room.history_visibility",
-        depth: 3
+        type: "m.room.history_visibility"
       },
       %{
         content: %{"guest_access" => guest_access(preset)},
         unsigned: %{},
         sender: user_mxid,
         state_key: "",
-        type: "m.room.guest_access",
-        depth: 4
+        type: "m.room.guest_access"
       },
       %{
         content: %{"membership" => "join"},
         unsigned: %{},
         state_key: user_mxid,
         sender: user_mxid,
-        type: "m.room.member",
-        depth: 5
+        type: "m.room.member"
       }
     ]
 
@@ -116,7 +106,6 @@ defmodule Dopamine.Rooms do
         do: [
           %{
             unsigned: %{},
-            depth: hd(events).depth + 1,
             sender: user_mxid,
             state_key: "",
             type: "m.room.name",
@@ -128,56 +117,65 @@ defmodule Dopamine.Rooms do
 
     events = Enum.reverse(events)
 
-    state = calculate_initial_state(events)
+    events |> Enum.each(fn event -> Dopamine.Rooms.Server.insert_event!(room_pid, event) end)
 
-    room = %Room{matrix_id: matrix_id, public: public, state: state}
+    membership = %{
+      room_id: room.id,
+      user_id: user.id,
+      status: "joined"
+    }
 
-    multi =
-      Multi.new()
-      |> Multi.insert(:room, room)
-      |> Multi.run(:membership, fn repo, %{room: room} ->
-        repo.insert(%Membership{status: "joined", room_id: room.id, user_id: user.id})
-      end)
-      |> Multi.run(:events, fn repo, %{room: room} -> insert_events(repo, room, events) end)
+    membership = Dopamine.Rooms.Membership.changeset(%Dopamine.Rooms.Membership{}, membership)
 
-    Dopamine.Repo.transaction(multi)
+    Dopamine.Repo.insert!(membership)
+
+    IO.puts("new membership???")
+    IO.inspect(membership)
+
+    Phoenix.PubSub.broadcast(
+      DopamineWeb.PubSub,
+      user_mxid,
+      {:join_room, room}
+    )
+
+    {:ok, room.matrix_id}
   end
 
-  defp calculate_initial_state(events) do
-    Enum.reduce(events, %{}, fn event, acc ->
-      if Map.has_key?(event, "state_key") do
-      else
-        key = Jason.encode!(%{"state_key" => event.state_key, "type" => event.type})
-        content = %Dopamine.Rooms.RoomState{content: event.content}
-        Map.put(acc, key, content)
-      end
-    end)
+  defp create_empty_room(creator, public, version \\ "1") do
+    root_event_content = %{creator: creator, "m.federate": false, room_version: version}
+    root_event_id = Dopamine.MatrixID.generate(:event)
+
+    initial_state = %{
+      "m.room.create" => %{"" => %{content: root_event_content, current_id: root_event_id}}
+    }
+
+    room =
+      Dopamine.Rooms.Room.creation_changeset(%Dopamine.Rooms.Room{}, %{
+        public: public,
+        state: initial_state
+      })
+      |> Dopamine.Repo.insert!()
+
+    attrs = %{
+      room_id: room.id,
+      matrix_id: root_event_id,
+      content: root_event_content,
+      unsigned: %{},
+      type: "m.room.create",
+      state_key: "",
+      depth: 0
+    }
+
+    %Dopamine.Rooms.Event{}
+    |> Dopamine.Rooms.Event.creation_changeset(attrs)
+    |> Dopamine.Repo.insert!()
+
+    {:ok, room}
   end
 
   def public_rooms() do
     query = from(r in Dopamine.Rooms.Room, where: r.public == true)
     Dopamine.Repo.all(query)
-  end
-
-  defp insert_events(repo, room, events) do
-    alias Dopamine.Rooms.Event
-
-    events =
-      events
-      |> Enum.map(fn e -> Map.put(e, :room_id, room.id) end)
-      |> Enum.map(fn e -> Event.creation_changeset(%Event{}, e) end)
-
-    results =
-      events
-      |> Enum.map(fn e -> repo.insert(e) end)
-      |> Enum.reduce_while({:ok, []}, fn r, {:ok, events} ->
-        case r do
-          {:ok, event} -> {:cont, {:ok, [event | events]}}
-          error -> {:halt, error}
-        end
-      end)
-
-    results
   end
 
   defp join_rules("public_chat") do

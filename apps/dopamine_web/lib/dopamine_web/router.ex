@@ -32,6 +32,9 @@ defmodule DopamineWeb.Router do
     get("/publicRooms", RoomController, :get_public)
     post("/publicRooms", RoomController, :get_public)
 
+    put("/rooms/:room_id/state/:type", RoomController, :set_state)
+    put("/rooms/:room_id/state/:type/:state_key", RoomController, :set_state)
+
     get("/directory/list/room/:room_id", RoomController, :get_visibility)
     put("/directory/list/room/:room_id", RoomController, :set_visibility)
 

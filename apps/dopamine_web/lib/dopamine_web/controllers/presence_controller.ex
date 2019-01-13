@@ -4,8 +4,6 @@ defmodule DopamineWeb.PresenceController do
   def update(conn, params) do
     updated_user = conn.path_params["user_id"]
 
-    IO.puts(updated_user)
-
     session = conn.assigns.session
     user = session.user
 

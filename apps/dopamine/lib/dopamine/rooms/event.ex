@@ -43,8 +43,22 @@ defmodule Dopamine.Rooms.Event do
   def creation_changeset(event, attrs) do
     event
     |> change()
-    |> put_change(:matrix_id, Dopamine.MatrixID.generate(:event))
+    |> add_matrix_id()
     |> put_change(:origin_timestamp, DateTime.utc_now())
     |> changeset(attrs)
+  end
+
+  def state_event?(%__MODULE__{state_key: key}) when is_nil(key) do
+    false
+  end
+
+  def state_event?(_), do: true
+
+  defp add_matrix_id(changeset) do
+    if Ecto.Changeset.get_field(changeset, :matrix_id) == nil do
+      Ecto.Changeset.put_change(changeset, :matrix_id, Dopamine.MatrixID.generate(:event))
+    else
+      changeset
+    end
   end
 end

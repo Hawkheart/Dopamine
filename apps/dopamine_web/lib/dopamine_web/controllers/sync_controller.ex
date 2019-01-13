@@ -167,6 +167,7 @@ defmodule DopamineWeb.SyncController do
       joined_rooms =
         for {room_id, events} <- new_events, into: %{} do
           timeline = Enum.map(events, &format_event/1)
+          # TODO -> properly format this (limited, prev_batch)
           {room_id, %{timeline: %{events: timeline}}}
         end
 

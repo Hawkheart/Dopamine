@@ -13,6 +13,6 @@ defmodule Dopamine.Repo.Migrations.CreateMemberships do
 
     create(index(:memberships, [:room_id]))
     create(index(:memberships, [:user_id]))
-    create(unique_index(:memberships, [:room_id, :user_id]))
+    create(unique_index(:memberships, [:room_id, :user_id], name: :memberships_user_room_index))
   end
 end

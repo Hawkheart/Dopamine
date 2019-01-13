@@ -15,7 +15,6 @@ defmodule Dopamine.Rooms.RoomState do
 
     data
     |> cast(attrs, [:current_id, :prev_id, :content])
-    |> validate_required([:current_id, :content])
   end
 
   def type, do: :map
@@ -46,17 +45,37 @@ end
 defmodule Dopamine.Rooms.Room do
   use Dopamine.Schema
 
+  import Ecto.Changeset
+
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
   schema "rooms" do
     field(:public, :boolean, default: false)
     field(:matrix_id, Dopamine.MatrixID)
 
-    field(:state, {:map, Dopamine.Rooms.RoomState})
+    field(:state, {:map, {:map, Dopamine.Rooms.RoomState}})
 
     has_many(:events, Dopamine.Rooms.Event)
     has_many(:memberships, Dopamine.Rooms.Membership)
 
     timestamps()
+  end
+
+  def changeset(data, attrs) do
+    data
+    |> cast(attrs, [:state, :public])
+  end
+
+  def creation_changeset(data, attrs) do
+    data
+    |> change()
+    |> generate_matrix_id()
+    |> unique_constraint(:matrix_id)
+    |> changeset(attrs)
+  end
+
+  def generate_matrix_id(data) do
+    id = Dopamine.MatrixID.generate(:room)
+    data |> put_change(:matrix_id, id)
   end
 end
