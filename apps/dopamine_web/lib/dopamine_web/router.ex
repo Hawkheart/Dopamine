@@ -55,6 +55,10 @@ defmodule DopamineWeb.Router do
     get("/account/3pid", ProfileController, :list_3pids)
   end
 
+  scope "/_matrix/client/unstable", DopamineWeb do
+    get("/thirdparty/protocols", InfoController, :protocol_list)
+  end
+
   scope "/_matrix/client/r0/presence", DopamineWeb do
     pipe_through(:authenticated)
 

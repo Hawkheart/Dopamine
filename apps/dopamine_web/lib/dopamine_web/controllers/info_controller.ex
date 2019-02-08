@@ -8,4 +8,8 @@ defmodule DopamineWeb.InfoController do
   def server_version(conn, _params) do
     render(conn, "server_version.json")
   end
+
+  def protocol_list(conn, _params) do
+    conn |> json(%{})
+  end
 end
