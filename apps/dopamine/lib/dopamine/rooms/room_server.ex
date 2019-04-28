@@ -97,6 +97,10 @@ defmodule Dopamine.Rooms.Server do
         state
       end
 
+    # Handle any side-effects...
+    state = state |> handle_event(event)
+
+    # Broadcast the event to all current members.
     Enum.each(state.room.memberships, fn membership ->
       user_id = Dopamine.Accounts.User.matrix_id(membership.user)
       Phoenix.PubSub.broadcast!(DopamineWeb.PubSub, user_id, {:event, state.room, event})
@@ -156,5 +160,43 @@ defmodule Dopamine.Rooms.Server do
     import Ecto.Query, only: [from: 2]
 
     from(e in Dopamine.Rooms.Event, order_by: [desc: e.depth, desc: e.inserted_at])
+  end
+
+  defp handle_event(state, event = %Dopamine.Rooms.Event{type: "m.room.member"}) do
+    # TODO this will need to be redone when federation support comes.
+    # Will need to separate local/remote users.
+
+    IO.puts("Handling new membership.")
+
+    username = Dopamine.MatrixID.parse(event.state_key).localpart
+
+    user = Dopamine.Accounts.get(username)
+
+    membership = %{
+      room_id: state.room.id,
+      user_id: user.id,
+      status: "joined"
+    }
+
+    membership = Dopamine.Rooms.Membership.changeset(%Dopamine.Rooms.Membership{}, membership)
+
+    membership = Dopamine.Repo.insert!(membership) |> Dopamine.Repo.preload(:user)
+
+    IO.inspect(membership)
+    IO.inspect(state.room.memberships)
+
+    room = %Dopamine.Rooms.Room{state.room | memberships: [membership | state.room.memberships]}
+
+    Phoenix.PubSub.broadcast!(
+      DopamineWeb.PubSub,
+      Dopamine.Accounts.User.matrix_id(user),
+      {:join_room, room}
+    )
+
+    %__MODULE__{state | room: room}
+  end
+
+  defp handle_event(state, _event) do
+    state
   end
 end

@@ -119,25 +119,6 @@ defmodule Dopamine.Rooms do
 
     events |> Enum.each(fn event -> Dopamine.Rooms.Server.insert_event!(room_pid, event) end)
 
-    membership = %{
-      room_id: room.id,
-      user_id: user.id,
-      status: "joined"
-    }
-
-    membership = Dopamine.Rooms.Membership.changeset(%Dopamine.Rooms.Membership{}, membership)
-
-    Dopamine.Repo.insert!(membership)
-
-    IO.puts("new membership???")
-    IO.inspect(membership)
-
-    Phoenix.PubSub.broadcast(
-      DopamineWeb.PubSub,
-      user_mxid,
-      {:join_room, room}
-    )
-
     {:ok, room.matrix_id}
   end
 

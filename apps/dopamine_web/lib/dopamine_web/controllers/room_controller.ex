@@ -149,47 +149,23 @@ defmodule DopamineWeb.RoomController do
     import Ecto.Query, only: [from: 2]
     room_mxid = conn.path_params["room_id"]
 
+    {:ok, room_pid} = Dopamine.Rooms.get_room(room_mxid)
+
     room =
       Dopamine.Repo.one!(from(r in Dopamine.Rooms.Room, where: r.matrix_id == ^room_mxid))
       |> Dopamine.Repo.preload([:memberships, memberships: [:user]])
 
     user_mxid = Dopamine.Accounts.User.matrix_id(conn.assigns.user)
 
-    new_membership = %Dopamine.Rooms.Membership{
-      status: "joined",
-      user_id: conn.assigns.user.id,
-      room_id: room.id
-    }
-
-    Dopamine.Repo.insert!(new_membership)
-
     attrs = %{
       content: %{"membership" => "join"},
       unsigned: %{},
       state_key: user_mxid,
       sender: user_mxid,
-      type: "m.room.member",
-      room_id: room.id,
-      depth: 9001
+      type: "m.room.member"
     }
 
-    event =
-      Dopamine.Rooms.Event.creation_changeset(%Dopamine.Rooms.Event{}, attrs)
-      |> Dopamine.Repo.insert!()
-
-    room.memberships
-    |> Enum.filter(fn membership -> membership.status == "joined" end)
-    |> Enum.map(fn membership -> membership.user end)
-    |> Enum.map(fn user -> Dopamine.Accounts.User.matrix_id(user) end)
-    |> Enum.each(fn user ->
-      Phoenix.PubSub.broadcast!(DopamineWeb.PubSub, user, {:event, room, event})
-    end)
-
-    Phoenix.PubSub.broadcast!(
-      DopamineWeb.PubSub,
-      Dopamine.Accounts.User.matrix_id(conn.assigns.user),
-      {:join_room, room}
-    )
+    {:ok, _event} = Dopamine.Rooms.Server.insert_event!(room_pid, attrs)
 
     conn |> json(%{})
   end
